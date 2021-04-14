@@ -28,16 +28,24 @@ module GraphQL
 
         config = GraphQL::RailsLogger.configuration
 
-        info "Processing by #{payload[:controller]}##{payload[:action]} as #{format}"
-
         if config.white_list.fetch(payload[:controller], []).include?(payload[:action])
           formatter = Rouge::Formatters::Terminal256.new(config.theme)
           query_lexer = Rouge::Lexers::GraphQL.new
           variables_lexer = Rouge::Lexers::Ruby.new
 
-          (params['_json'] || [params.slice('query', 'variables', 'extensions')]).each do |data|
+          request_data = params['_json'] || [params.slice('query', 'variables', 'extensions')]
 
-            next if config.skip_introspection_query && data['query'].index(/query IntrospectionQuery/)
+          if config.skip_introspection_query
+            introspection_query = request_data.find do |data|
+              config.skip_introspection_query && data['query'].index(/query IntrospectionQuery/)
+            end
+
+            return if introspection_query.present?
+          end
+
+          info "Processing by #{payload[:controller]}##{payload[:action]} as #{format}"
+
+          request_data.each do |data|
 
             # Cleanup and indent params for logging
             query = indent(data.fetch('query', ''))
